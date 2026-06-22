@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Multiscan</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Multiscan</h1>
+    <nav>
+      <button class="tab-btn active" data-tab="overview">概览</button>
+      <button class="tab-btn" data-tab="workers">Worker</button>
+      <button class="tab-btn" data-tab="tasks">任务</button>
+      <button class="tab-btn" data-tab="create">创建</button>
+    </nav>
+    <span id="conn-status" class="status-dot"></span>
+  </header>
+
+  <main>
+    <!-- ── Overview ── -->
+    <section id="tab-overview" class="tab-content active">
+      <!-- Quick start -->
+      <div class="quick-bar">
+        <form id="quick-form" onsubmit="return false;">
+          <div class="quick-row">
+            <input type="text" id="quick-asn" placeholder="ASN — 例: AS13335,AS209242" class="quick-input" required>
+            <input type="text" id="quick-ports" value="443,8443,2053,2083,2087,2096" class="quick-ports" title="端口号，逗号分隔">
+            <input type="number" id="quick-shards" value="1" min="1" max="20" class="quick-shards" title="分片数 (按 IP 均分)">
+            <label class="btn-file-label" title="从文件导入 ASN 列表">
+              导入
+              <input type="file" id="quick-file" accept=".txt,.csv" class="btn-file-input" onchange="importASNFile(event)">
+            </label>
+            <button type="submit" id="quick-start-btn" class="btn-primary" onclick="quickStart(event)">开始扫描</button>
+          </div>
+          <div id="quick-result" class="quick-result"></div>
+        </form>
+      </div>
+
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-value" id="stat-workers-online">0</div><div class="stat-label">在线 Worker</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-workers-offline">0</div><div class="stat-label">离线 Worker</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-tasks-pending">0</div><div class="stat-label">待处理</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-tasks-running">0</div><div class="stat-label">运行中</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-tasks-completed">0</div><div class="stat-label">已完成</div></div>
+        <div class="stat-card"><div class="stat-value" id="stat-total-hits">0</div><div class="stat-label">总命中数</div></div>
+      </div>
+
+      <h2>活跃 Worker</h2>
+      <div id="worker-cards" class="card-list"></div>
+
+      <h2>任务</h2>
+      <div id="task-groups"></div>
+    </section>
+
+    <!-- ── Workers ── -->
+    <section id="tab-workers" class="tab-content">
+      <h2>Worker 列表</h2>
+      <div id="worker-list" class="card-list"></div>
+    </section>
+
+    <!-- ── Tasks ── -->
+    <section id="tab-tasks" class="tab-content">
+      <h2>任务列表</h2>
+      <div class="table-wrap">
+        <table id="task-table">
+          <thead><tr><th>ID</th><th>名称</th><th>ASN</th><th>端口</th><th>Worker</th><th>状态</th><th>进度</th><th>命中</th><th>分片</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Create ── -->
+    <section id="tab-create" class="tab-content">
+      <h2>创建任务</h2>
+      <form id="create-form" class="create-form">
+        <label>名称 <input type="text" name="name" placeholder="例: scan-13335"></label>
+        <label>ASN（逗号分隔）<input type="text" name="asns" placeholder="例: AS13335,AS209242" required></label>
+        <label>端口（逗号分隔）<input type="text" name="ports" placeholder="例: 443,8443" value="443,8443" required></label>
+        <label>速率 <input type="number" name="max_rate" value="15000"></label>
+        <label>预估 IP 数 <input type="number" name="total_ips" value="200000"></label>
+        <label>分片数 (按 IP 均分) <input type="number" name="shards" value="1" min="1" max="20"></label>
+        <button type="submit" class="btn-primary">创建</button>
+      </form>
+      <div id="create-result"></div>
+    </section>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

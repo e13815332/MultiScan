@@ -1,0 +1,21 @@
+# Multiscan — output / build artifacts
+bin/
+release/
+*.tar.gz
+
+# Compiled binaries (root)
+master
+worker
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
