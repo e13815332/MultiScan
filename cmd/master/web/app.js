@@ -11,9 +11,11 @@
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = proto + '//' + location.host + '/api/dashboard/ws';
     ws = new WebSocket(url);
-    ws.onopen = () => { console.log('Dashboard WS connected'); };
+    ws.onopen = () => {
+      document.getElementById('conn-status').className = 'status-dot connected';
+    };
     ws.onclose = () => {
-      console.log('WS disconnected, reconnecting...');
+      document.getElementById('conn-status').className = 'status-dot disconnected';
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(connectWS, 3000);
     };
@@ -21,7 +23,6 @@
       try {
         const msg = JSON.parse(evt.data);
         if (msg.type === 'init') {
-          // Initial state dump
           if (msg.workers) Object.assign(workers, msg.workers);
           if (msg.tasks) Object.assign(tasks, msg.tasks);
         } else if (msg.type === 'worker_online' || msg.type === 'worker_update') {
@@ -67,13 +68,9 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     connectWS();
-
-    // Tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
-
-    // Quick start form
     document.getElementById('quick-form').addEventListener('submit', (e) => {
       e.preventDefault();
       quickStart();
@@ -84,7 +81,6 @@
   function quickStart() {
     const asnInput = document.getElementById('quick-asn');
     const portInput = document.getElementById('quick-ports');
-    const shardInput = document.getElementById('quick-shards');
     const btn = document.getElementById('quick-start-btn');
     const resultDiv = document.getElementById('quick-result');
 
@@ -92,7 +88,6 @@
     if (asns.length === 0) { alert('请输入 ASN'); return; }
     const ports = portInput.value.trim().split(/[,\s]+/).filter(Boolean).map(Number).filter(n => n > 0);
     if (ports.length === 0) { alert('请输入端口'); return; }
-    const shards = parseInt(shardInput.value) || 1;
 
     btn.disabled = true;
     btn.textContent = '提交中...';
@@ -101,9 +96,7 @@
     form.set('name', 'scan-' + asns[0].replace('AS', ''));
     form.set('asns', asns.join(','));
     form.set('ports', ports.join(','));
-    form.set('shards', String(shards));
     form.set('max_rate', '15000');
-    form.set('total_ips', '200000');
 
     fetch('/api/task/create', {
       method: 'POST',
@@ -113,41 +106,16 @@
       btn.disabled = false;
       btn.textContent = '开始扫描';
       if (d.error) {
-        resultDiv.innerHTML = '<div class="error">错误: ' + esc(d.error) + '</div>';
+        resultDiv.innerHTML = '<div class="quick-err">错误: ' + esc(d.error) + '</div>';
       } else {
-        resultDiv.innerHTML = '<div class="success">任务已创建: ' + esc(d.group_id || d.id) + '</div>';
+        resultDiv.innerHTML = '<div class="quick-ok">已创建: ' + esc(d.group_id || d.id) + '</div>';
         switchTab('tasks');
       }
     }).catch(e => {
       btn.disabled = false;
       btn.textContent = '开始扫描';
-      resultDiv.innerHTML = '<div class="error">请求失败: ' + esc(e.message) + '</div>';
+      resultDiv.innerHTML = '<div class="quick-err">请求失败: ' + esc(e.message) + '</div>';
     });
-  }
-
-  // ── Import ASN file ──
-  function importASNFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target.result;
-      const asns = [];
-      const lines = text.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        const match = trimmed.match(/AS?(\d+)/i);
-        if (match) asns.push('AS' + match[1]);
-      }
-      if (asns.length > 0) {
-        document.getElementById('quick-asn').value = asns.join(', ');
-        alert('已导入 ' + asns.length + ' 个 ASN');
-      } else {
-        alert('未找到有效 ASN');
-      }
-    };
-    reader.readAsText(file);
   }
 
   // ── Cancel ──
@@ -196,10 +164,8 @@
       totalHits += t.hits || 0;
     });
     const onlineWorkers = Object.values(workers).filter(w => w.online).length;
-    const offlineWorkers = Object.values(workers).filter(w => !w.online).length;
 
     document.getElementById('stat-workers-online').textContent = onlineWorkers;
-    document.getElementById('stat-workers-offline').textContent = offlineWorkers;
     document.getElementById('stat-tasks-pending').textContent = counts.pending;
     document.getElementById('stat-tasks-running').textContent = counts.running + counts.assigned;
     document.getElementById('stat-tasks-completed').textContent = counts.completed;
@@ -220,7 +186,25 @@
     if (!container) return;
     const arr = Object.values(workers);
     if (arr.length === 0) { container.innerHTML = '<div class="empty">暂无 Worker</div>'; return; }
-    container.innerHTML = arr.map(w => workerCardHTML(w)).join('');
+    container.innerHTML = arr.map(w => {
+      const status = w.online ? (w.status || 'online') : 'offline';
+      return '<div class="worker-card">' +
+        '<span class="worker-name">' + esc(w.name || w.uuid) + '</span>' +
+        '<span class="worker-status ' + status + '">' + status + '</span>' +
+        '<span class="worker-meta">' + (w.online ? '上线 ' + formatTime(w.connected_at) : '下线') + '</span>' +
+        '<span class="worker-cap">CPU ' + fmtPct(w.cpu_percent) + ' · MEM ' + fmtPct(w.memory_percent) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 60) return diff + '秒前';
+    if (diff < 3600) return Math.floor(diff/60) + '分钟前';
+    return Math.floor(diff/3600) + '小时前';
   }
 
   function workerCardHTML(w) {
@@ -229,11 +213,11 @@
     const phase = w.phase || '';
     const caps = w.capabilities || {};
     const tasksInfo = caps.max_tasks
-      ? '<span class="worker-cap">📋 ' + (w.running_tasks || 0) + '/' + caps.max_tasks + '</span>' : '';
+      ? '<span class="worker-cap">&#' + '128203; ' + (w.running_tasks || 0) + '/' + caps.max_tasks + '</span>' : '';
     const hwInfo = caps.cpu_count
-      ? '<span class="worker-cap">💻 ' + caps.cpu_count + '核/' + caps.memory_mb + 'MB</span>' : '';
+      ? '<span class="worker-cap">&#' + '128187; ' + caps.cpu_count + '核/' + caps.memory_mb + 'MB</span>' : '';
     const concInfo = caps.max_concurrent
-      ? '<span class="worker-cap">⚡ ' + caps.max_concurrent + '并发</span>' : '';
+      ? '<span class="worker-cap">&#' + '9889; ' + caps.max_concurrent + '并发</span>' : '';
 
     return '<div class="worker-card">' +
       '<span class="worker-name">' + esc(w.name || w.uuid) + '</span>' +
@@ -242,15 +226,15 @@
         '<div class="progress-bar">' +
           '<div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + Math.min(pct, 100) + '%"></div>' +
         '</div>' +
-        '<span class="progress-text">' + esc(w.progress || '0%') + '</span>' +
+        '<span>' + esc(w.progress || '0%') + '</span>' +
       '</div>' +
-      '<span class="worker-phase">' + esc(phase) + '</span>' +
+      '<span class="worker-phase">' + phase + '</span>' +
       '<span class="worker-meta">CPU ' + fmtPct(w.cpu_percent) + ' · MEM ' + fmtPct(w.memory_percent) + '</span>' +
       '<span class="worker-caps">' + tasksInfo + ' ' + hwInfo + ' ' + concInfo + '</span>' +
     '</div>';
   }
 
-  // ── Render: Task groups ──
+  // ── Render: Task groups (overview section) ──
   function renderTaskGroupsOverview() {
     const container = document.getElementById('task-groups');
     const { groups, singles } = getTaskGroups();
@@ -260,7 +244,6 @@
       container.innerHTML = '<div class="empty">暂无任务</div>';
       return;
     }
-
     container.innerHTML = all.map(item => {
       if (item.type === 'group') return groupCardHTML(item.data);
       return taskCardHTML(item.data);
@@ -291,39 +274,40 @@
   function shardCardHTML(s) {
     const pct = parseProgress(s.progress);
     const phase = s.phase || '';
-    return '<div class="task-card shard-card">' +
-      '<span class="task-name">' + esc(s.name || s.id) + '</span>' +
+    let workerName = '';
+    if (s.assigned_to && workers[s.assigned_to]) {
+      workerName = workers[s.assigned_to].name || s.assigned_to;
+    }
+    return '<div class="shard-row">' +
+      '<span class="shard-id">' + esc(s.name || s.id.substring(0, 8)) + '</span>' +
       '<span class="badge ' + s.status + '">' + esc(s.status) + '</span>' +
-      '<div class="task-info">' +
-        '<span>' + (s.hits || 0) + ' 命中 / ' + (s.scanned_ips || 0) + ' IP</span>' +
-      '</div>' +
-      '<div class="worker-progress">' +
+      '<div class="shard-progress">' +
         '<div class="progress-bar">' +
           '<div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + Math.min(pct, 100) + '%"></div>' +
         '</div>' +
-        '<span class="progress-text">' + esc(phase || s.progress || '0%') + '</span>' +
+        '<span class="shard-phase">' + esc(phase) + '</span>' +
       '</div>' +
-      (canCancel(s) ? '<button class="btn-cancel" onclick="cancelTask(\'' + esc(s.id) + '\')">取消</button>' : '') +
+      '<span class="shard-hits">' + (s.hits || 0) + ' 命中</span>' +
+      (workerName ? '<span class="shard-worker">' + esc(workerName) + '</span>' : '') +
+      (canCancel(s) ? '<button class="btn-cancel-sm" onclick="cancelTask(\'' + esc(s.id) + '\')">取消</button>' : '') +
     '</div>';
   }
 
-  // ── Render: Task list ──
+  // ── Render: Task list (Tasks tab) ──
   function renderTasks() {
     const tbody = document.querySelector('#task-table tbody');
     if (!tbody) return;
     const taskArr = Object.values(tasks);
     if (taskArr.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty">暂无任务</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无任务</td></tr>';
       return;
     }
     tbody.innerHTML = taskArr.map(t => {
       const pct = parseProgress(t.progress);
-      const phase = t.phase || '';
       let workerName = '';
       if (t.assigned_to && workers[t.assigned_to]) {
         workerName = workers[t.assigned_to].name || t.assigned_to;
       }
-      const shardInfo = t.shard_total > 1 ? (t.shard_index + 1) + '/' + t.shard_total : '-';
       return '<tr>' +
         '<td>' + esc(t.id ? t.id.substring(0, 8) : '-') + '</td>' +
         '<td>' + esc(t.name || '') + '</td>' +
@@ -331,10 +315,9 @@
         '<td>' + esc((t.ports || []).join(', ')) + '</td>' +
         '<td>' + esc(workerName || '-') + '</td>' +
         '<td><span class="badge ' + t.status + '">' + esc(t.status) + '</span></td>' +
-        '<td><div class="progress-bar mini"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' + Math.round(pct) + '%</td>' +
+        '<td><div class="td-progress"><div class="progress-bar mini"><div class="progress-fill' + (pct >= 100 ? ' complete' : '') + '" style="width:' + Math.min(pct, 100) + '%"></div></div>' + Math.round(pct) + '%</div></td>' +
         '<td>' + (t.hits || 0) + '</td>' +
-        '<td>' + shardInfo + '</td>' +
-        '<td>' + (canCancel(t) ? '<button class="btn-cancel btn-sm" onclick="cancelTask(\'' + esc(t.id) + '\')">取消</button>' : '') + '</td>' +
+        '<td>' + (canCancel(t) ? '<button class="btn-cancel-sm" onclick="cancelTask(\'' + esc(t.id) + '\')">取消</button>' : '') + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -355,31 +338,24 @@
     return { groups, singles };
   }
 
-  // ── Expose functions to global scope for onclick handlers ──
+  // ── Expose to global for onclick ──
   window.cancelTask = cancelTask;
   window.cancelGroup = cancelGroup;
   window.switchTab = switchTab;
   window.quickStart = quickStart;
-  window.importASNFile = importASNFile;
 
   // ── Poll fallback every 5s ──
   function pollWorkers() {
-    fetch('/api/worker/list')
-      .then(r => r.json())
-      .then(list => {
-        list.forEach(w => { workers[w.uuid] = w; });
-        renderAll();
-      })
-      .catch(() => {});
+    fetch('/api/worker/list').then(r => r.json()).then(list => {
+      list.forEach(w => { workers[w.uuid] = w; });
+      renderAll();
+    }).catch(() => {});
   }
   function pollTasks() {
-    fetch('/api/task/list')
-      .then(r => r.json())
-      .then(list => {
-        list.forEach(t => { tasks[t.id] = t; });
-        renderAll();
-      })
-      .catch(() => {});
+    fetch('/api/task/list').then(r => r.json()).then(list => {
+      list.forEach(t => { tasks[t.id] = t; });
+      renderAll();
+    }).catch(() => {});
   }
 
   setInterval(() => { pollWorkers(); pollTasks(); }, 5000);
