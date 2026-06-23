@@ -218,7 +218,7 @@ func (r *TaskRunner) run() {
 				cfHits = append(cfHits, result)
 				finalResults = append(finalResults, protocol.ScanEntry{
 					IP: result.IP, Port: result.Port,
-					Status: result.Status, Delay: result.Delay,
+					Status: "tls-ok", Delay: result.Delay,
 				})
 			}
 		case <-progressTick.C:
