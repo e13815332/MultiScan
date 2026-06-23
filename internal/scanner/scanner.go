@@ -5,26 +5,11 @@ package scanner
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
 )
-
-// Default transport used for scanning. Reused across requests for efficiency.
-var defaultTransport = &http.Transport{
-	TLSClientConfig: &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         "cloudflare.com",
-	},
-	DialContext: (&net.Dialer{
-		Timeout:   1500 * time.Millisecond,
-		KeepAlive: -1,
-	}).DialContext,
-	MaxIdleConns:        0,
-	MaxIdleConnsPerHost: 0,
-	IdleConnTimeout:     1 * time.Second,
-	DisableKeepAlives:   true,
-}
 
 // ScanResult holds the result of scanning a single IP:port.
 type ScanResult struct {
@@ -72,8 +57,9 @@ func CheckProxy(ip string, port int, cfg ScannerConfig) ScanResult {
 			Timeout:   cfg.ConnectTO,
 			KeepAlive: -1,
 		}).DialContext,
-		MaxIdleConns:        0,
-		MaxIdleConnsPerHost: 0,
+		ForceAttemptHTTP2:   false,
+		MaxIdleConns:        1,
+		MaxIdleConnsPerHost: 1,
 		IdleConnTimeout:     1 * time.Second,
 		DisableKeepAlives:   true,
 	}
@@ -92,7 +78,7 @@ func CheckProxy(ip string, port int, cfg ScannerConfig) ScanResult {
 	if err != nil {
 		return ScanResult{IP: ip, Port: port, IsCF: false, Status: "error", Delay: int(time.Since(start).Milliseconds())}
 	}
-	defer resp.Body.Close()
+	defer func() { io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
 
 	delay := int(time.Since(start).Milliseconds())
 	serverHeader := resp.Header.Get("Server")

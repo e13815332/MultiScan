@@ -108,6 +108,7 @@ func Run(cfg Config) ([]MasscanResult, error) {
 
 // parseMasscanOutput parses the masscan -oL output format.
 // Format: open tcp PORT IP TIMESTAMP
+// Deduplicates by IP during parsing to reduce memory.
 func parseMasscanOutput(path string) ([]MasscanResult, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -115,6 +116,7 @@ func parseMasscanOutput(path string) ([]MasscanResult, error) {
 	}
 	defer f.Close()
 
+	seen := make(map[string]bool)
 	var results []MasscanResult
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -138,6 +140,12 @@ func parseMasscanOutput(path string) ([]MasscanResult, error) {
 			continue
 		}
 		ip := fields[3]
+
+		// Dedup by IP (keep first seen port)
+		if seen[ip] {
+			continue
+		}
+		seen[ip] = true
 
 		results = append(results, MasscanResult{IP: ip, Port: port})
 	}
