@@ -1,13 +1,14 @@
-# Multiscan — output / build artifacts
+# MultiScan — output / build artifacts
 bin/
 release/
 *.tar.gz
+/tmp/
 
-# Compiled binaries (root)
-master
-worker
+# Compiled binaries (root level only)
+/master
+/worker
 
-# OS / editor
+# IDE / OS
 .DS_Store
 Thumbs.db
 *.swp
@@ -19,3 +20,17 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Go
+*.test
+*.out
+vendor/
+
+# Masscan temp
+masscan_output/
+*.masscan
+v2/cmd/master/master
+v2/cmd/worker/worker
+v2/master
+v2/cmd/master/master
+v2/cmd/worker/worker

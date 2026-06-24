@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multiscan v2</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d37;--text:#c9d1d9;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--muted:#6e7681;--purple:#a371f7}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--border)}
+header h1{font-size:18px;color:var(--accent);white-space:nowrap}
+.tabs{display:flex;gap:4px}
+.tab{padding:6px 14px;border:none;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;font-size:13px}
+.tab.active{background:var(--border);color:var(--text)}
+main{padding:16px 20px;max-width:1200px;margin:0 auto}
+.section{display:none}
+.section.active{display:block}
+
+.form-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.form-row input[type=text],.form-row select{flex:1;min-width:160px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px}
+.form-row input[type=text]::placeholder{color:var(--muted)}
+.form-row input[type=file]{max-width:40px;padding:6px;cursor:pointer;opacity:0;position:absolute}
+.file-btn{padding:8px 14px;background:var(--border);border:none;border-radius:6px;color:var(--text);cursor:pointer;font-size:13px;white-space:nowrap}
+.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-danger{background:var(--red);color:#fff}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.form-msg{margin-bottom:8px;font-size:13px}
+.form-msg .ok{color:var(--green)}
+.form-msg .err{color:var(--red)}
+
+.progress-section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px}
+.progress-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.progress-title{font-size:14px;font-weight:600}
+.progress-meta{font-size:12px;color:var(--muted)}
+.bar-wrap{height:8px;background:var(--border);border-radius:4px;margin:8px 0;overflow:hidden}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:4px;transition:width .5s}
+.bar-fill.done{background:linear-gradient(90deg,var(--green),#2ea043)}
+.progress-detail{display:flex;gap:20px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);padding:12px;border-radius:8px;border:1px solid var(--border)}
+.stat .val{font-size:22px;font-weight:700}
+.stat .lbl{font-size:12px;color:var(--muted);margin-top:4px}
+
+h2{font-size:14px;margin-bottom:8px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.card-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.card-id{font-size:11px;color:var(--muted)}
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
+.badge.运行{background:rgba(88,166,255,.15);color:var(--accent)}
+.badge.已完成{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.排队{background:rgba(210,153,34,.15);color:var(--yellow)}
+.badge.phase1{background:rgba(163,113,247,.15);color:var(--purple)}
+.badge.phase2{background:rgba(63,185,80,.15);color:var(--green)}
+.card-meta{display:flex;gap:12px;font-size:12px;color:var(--muted);margin-top:4px;align-items:center}
+.card-meta a{color:var(--red);text-decoration:none;margin-left:auto}
+
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.tbl th{color:var(--muted);font-weight:500}
+
+.worker-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px}
+.worker-dot{width:8px;height:8px;border-radius:50%}
+.worker-dot.online{background:var(--green)}
+.worker-dot.offline{background:var(--red)}
+.worker-name{font-weight:500;min-width:140px}
+.worker-meta{font-size:12px;color:var(--muted)}
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+
+@media(max-width:700px){.form-row{flex-direction:column;align-items:stretch}.stats{grid-template-columns:repeat(2,1fr)}.progress-detail{gap:8px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Multiscan v2</h1>
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">概览</button>
+    <button class="tab" data-tab="workers">Worker</button>
+    <button class="tab" data-tab="results">结果</button>
+  </div>
+</header>
+<main>
+  <section id="s-overview" class="section active">
+    <div class="form-row">
+      <input type="text" id="asn-in" placeholder="ASN — 例: AS132203,AS13335" required>
+      <span style="position:relative">
+        <input type="file" id="asn-file" accept=".txt,.csv" onchange="importASNFile(this)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer">
+        <span class="file-btn">📁 导入</span>
+      </span>
+      <input type="text" id="ports-in" value="443,8443,2053,2083,2087,2096" placeholder="端口，逗号分隔" style="min-width:160px">
+      <input type="text" id="label-in" placeholder="标签（可选，如：日本反代）" style="min-width:130px">
+      <button class="btn btn-primary" id="create-btn" onclick="createJob()">开始扫描</button>
+      <button class="btn btn-danger" id="stop-all-btn" onclick="cancelAll()">停止全部</button>
+      <button class="btn" onclick="clearDone()" style="background:var(--border);color:var(--muted)">清除已完成</button>
+    </div>
+    <div id="form-msg" class="form-msg"></div>
+
+    <div class="progress-section" id="progress-section" style="display:none">
+      <div class="progress-header">
+        <span class="progress-title" id="prog-title">扫描进度</span>
+        <span class="progress-meta" id="prog-elapsed"></span>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill" id="prog-bar" style="width:0%"></div></div>
+      <div class="progress-detail">
+        <span id="prog-pct">0%</span>
+        <span id="prog-done">已扫 0</span>
+        <span id="prog-total">共 0</span>
+        <span id="prog-cf">CF命中 0</span>
+        <span id="prog-verify">已验证 0</span>
+        <span id="prog-rate">速率 --/s</span>
+        <span id="prog-eta">预计剩余 --</span>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <h2>活跃任务</h2>
+    <div id="active-jobs"></div>
+
+    <h2>排队中</h2>
+    <div id="queued-jobs"></div>
+
+    <h2>已完成</h2>
+    <div id="done-jobs"></div>
+  </section>
+
+  <section id="s-workers" class="section">
+    <h2>Worker 列表</h2>
+    <div id="worker-list"></div>
+  </section>
+
+  <section id="s-results" class="section">
+    <h2>结果下载</h2>
+    <div class="form-row">
+      <select id="result-job-select" style="flex:1;min-width:180px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px" onchange="onJobSelect()">
+        <option value="">-- 选择任务 --</option>
+      </select>
+      <input type="text" id="result-search" placeholder="搜索 Job ID / ASN..." style="max-width:180px" oninput="filterJobDropdown()">
+      <button class="btn btn-primary" onclick="loadSelectedResults()">查看</button>
+      <button class="btn" onclick="downloadSelectedCSV()">下载 CSV</button>
+    </div>
+    <div id="results-summary" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+    <div id="results-table"></div>
+  </section>
+</main>
+
+<script>
+var POLL=3000,timer=null,knownJobs={},allJobsList=[],startTime=null,lastScanned=0,lastPollTime=0;
+
+function fmt(n){return n!=null?n.toLocaleString():'0';}
+function pct(d,t){return t>0?Math.round(d/t*100):0;}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function age(s){if(!s)return'--';var e=Math.floor((Date.now()/1000)-s);if(e<60)return e+'秒';if(e<3600)return Math.floor(e/60)+'分'+e%60+'秒';return Math.floor(e/3600)+'时'+Math.floor(e%3600/60)+'分';}
+function etaStr(s,t,d){if(!s||t<=0||d<=0)return'--';var r=Math.floor(s/d*t-s);if(r<60)return r+'秒';if(r<3600)return Math.floor(r/60)+'分';return Math.floor(r/3600)+'时'+Math.floor(r%3600/60)+'分';}
+
+async function api(url,opts){try{var r=await fetch(url,opts);return await r.json();}catch(e){return null;}}
+
+function setMsg(ok,msg){var e=document.getElementById('form-msg');e.innerHTML='<span class="'+(ok?'ok':'err')+'">'+msg+'</span>';}
+
+function importASNFile(input){
+  var f=input.files[0];if(!f)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    var asns=e.target.result.split(/[\r\n]+/).map(function(l){return l.trim();}).filter(function(l){return l&&l[0]!=='#';}).map(function(l){return l.replace(/^AS/i,'').replace(/,.*$/,'').trim();}).filter(Boolean);
+    if(!asns.length){setMsg(false,'文件中未找到 ASN');return;}
+    document.getElementById('asn-in').value='AS'+asns.join(',AS');
+    setMsg(true,'已导入 '+asns.length+' 个 ASN');
+  };
+  r.readAsText(f);
+  input.value='';
+}
+
+function createJob(){
+  var asnEl=document.getElementById('asn-in'),portEl=document.getElementById('ports-in'),lblEl=document.getElementById('label-in'),btn=document.getElementById('create-btn');
+  var asns=asnEl.value.trim().split(/[,\s]+/).filter(Boolean);
+  if(!asns.length){setMsg(false,'请输入 ASN');return;}
+  var ports=portEl.value.trim()||'443';
+  var label=lblEl.value.trim();
+  btn.disabled=true;
+  var f=new URLSearchParams();f.set('asns',asns.join(','));f.set('ports',ports);f.set('mode','tls');if(label)f.set('name',label);
+  fetch('/api/job/create',{method:'POST',body:f}).then(function(r){return r.json()}).then(function(d){
+    btn.disabled=false;
+    if(d.job_id){setMsg(true,'✓ 已创建: '+d.job_id);pollNow();startTime=Date.now();}
+    else setMsg(false,'创建失败');
+  }).catch(function(){btn.disabled=false;setMsg(false,'请求失败');});
+}
+
+function cancelJob(id){if(!confirm('取消 '+id+'?'))return;fetch('/api/job/cancel?id='+id,{method:'POST'}).then(function(){pollNow();});}
+function deleteJob(id){if(!confirm('删除 '+id+' 及其所有数据？'))return;fetch('/api/job/delete?id='+id,{method:'POST'}).then(function(){pollNow();});}
+function clearDone(){
+  if(!confirm('删除所有已完成/已取消任务及其数据？'))return;
+  var ct=0;Object.values(knownJobs).forEach(function(j){if(j.status!=='running'&&j.status!=='pending'){fetch('/api/job/delete?id='+j.job_id,{method:'POST'});ct++;}});
+  if(ct===0)alert('没有可清除的任务');else setTimeout(pollNow,1000);
+}
+function cancelAll(){
+  if(!confirm('停止全部运行中任务？'))return;
+  var ct=0;Object.values(knownJobs).forEach(function(j){if(j.status==='running'){fetch('/api/job/cancel?id='+j.job_id,{method:'POST'});ct++;}});
+  if(ct===0)alert('没有运行中的任务');else setTimeout(pollNow,1000);
+}
+
+function onJobSelect(){loadSelectedResults();}
+
+function loadSelectedResults(){
+  var id=document.getElementById('result-job-select').value;if(!id)return;
+  fetch('/api/job/results?id='+id).then(function(r){return r.json()}).then(function(data){
+    var div=document.getElementById('results-table'),sum=document.getElementById('results-summary');
+    if(!Array.isArray(data)||!data.length){sum.textContent='';div.innerHTML='<div class="empty">暂无结果</div>';return;}
+    sum.textContent='共 '+data.length+' 条已验证结果';
+    var h='<table class="tbl"><thead><tr><th>IP</th><th>端口</th><th>Colo</th><th>国家</th><th>ASN</th><th>延迟</th></tr></thead><tbody>';
+    data.forEach(function(r){h+='<tr><td>'+esc(r.ip)+'</td><td>'+r.port+'</td><td>'+esc(r.colo||'-')+'</td><td>'+esc(r.country||'-')+'</td><td>'+esc(r.asn||'-')+'</td><td>'+(r.delay||'-')+'ms</td></tr>';});
+    h+='</tbody></table>';div.innerHTML=h;
+  }).catch(function(){document.getElementById('results-table').innerHTML='<div class="empty">加载失败</div>';});
+}
+
+function downloadSelectedCSV(){
+  var id=document.getElementById('result-job-select').value;if(!id)return;
+  window.open('/api/job/results.csv?id='+id,'_blank');
+}
+
+function filterJobDropdown(){
+  var q=(document.getElementById('result-search').value||'').toLowerCase();
+  var sel=document.getElementById('result-job-select');
+  sel.innerHTML='<option value="">-- 选择任务 --</option>';
+  allJobsList.forEach(function(j){
+    var jid=(j.job_id||'').toLowerCase(),asns=(j.asns||'').toLowerCase();
+    if(!q||jid.indexOf(q)>=0||asns.indexOf(q)>=0){
+      sel.innerHTML+='<option value="'+esc(j.job_id)+'">'+esc((j.asns||j.job_id).substring(0,40)+' — '+j.job_id.substring(0,16))+'</option>';
+    }
+  });
+}
+
+async function pollNow(){
+  try{
+    var jl=await api('/api/job/list');
+    if(jl&&Array.isArray(jl)){knownJobs={};jl.forEach(function(j){knownJobs[j.job_id]=j;});allJobsList=jl;filterJobDropdown();}
+    var wl=await api('/api/worker/list');if(wl)renderWorkers(wl);
+    var st=await api('/api/stats');if(st)renderProgress(st);
+    renderOverview();
+  }catch(e){}
+}
+
+function renderProgress(st){
+  if(!st.running_jobs&&!st.pending){document.getElementById('progress-section').style.display='none';return;}
+  document.getElementById('progress-section').style.display='block';
+  var p=pct(st.scanned,st.total_ips),elapsed=startTime?age(startTime/1000):'--';
+
+  // Determine phase from first running job
+  var phase='phase2a',phaseLabel='阶段2·扫描';
+  var jl=Object.values(knownJobs);
+  for(var i=0;i<jl.length;i++){if(jl[i].status==='running'){phase=jl[i].phase;break;}}
+  if(phase==='phase1')phaseLabel='阶段1·masscan';
+  else if(phase==='phase2b'){phaseLabel='阶段2·API验证';p=pct(st.verified,st.total_ips);}
+
+  document.getElementById('prog-title').textContent=st.running_jobs?phaseLabel:'扫描完成';
+  document.getElementById('prog-elapsed').textContent='已用 '+elapsed;
+  document.getElementById('prog-bar').style.width=p+'%';
+  document.getElementById('prog-bar').className='bar-fill'+(p>=100?' done':'');
+  document.getElementById('prog-pct').textContent=p+'%';
+  document.getElementById('prog-done').textContent=(phase==='phase2b'?'已验证 ':'已扫 ')+fmt(phase==='phase2b'?st.verified:st.scanned);
+  document.getElementById('prog-total').textContent='共 '+fmt(st.total_ips);
+  document.getElementById('prog-cf').textContent='CF命中 '+fmt(st.cf_hits);
+  document.getElementById('prog-verify').textContent='已验证 '+fmt(st.verified);
+  var now=Date.now(),rate=0;
+  if(lastPollTime&&lastScanned<=(phase==='phase2b'?st.verified:st.scanned)){var dt=(now-lastPollTime)/1000;if(dt>0)rate=Math.round(((phase==='phase2b'?st.verified:st.scanned)-lastScanned)/dt);}
+  lastScanned=phase==='phase2b'?st.verified:st.scanned;lastPollTime=now;
+  document.getElementById('prog-rate').textContent='速率 '+(rate||'--')+'/s';
+  document.getElementById('prog-eta').textContent='预计剩余 '+etaStr(startTime?startTime/1000:0,st.total_ips,phase==='phase2b'?st.verified:st.scanned);
+}
+
+function renderOverview(){
+  var jobs=Object.values(knownJobs);
+  var running=jobs.filter(function(j){return j.status==='running'}).length;
+  var pending=jobs.filter(function(j){return j.status==='pending'}).length;
+  var done=jobs.filter(function(j){return j.status!=='running'&&j.status!=='pending'}).length;
+  var td=0,ta=0;jobs.forEach(function(j){td+=(j.done||0);ta+=(j.total||0);});
+  document.getElementById('stats').innerHTML=
+    '<div class="stat"><div class="val">'+running+'</div><div class="lbl">运行中</div></div>'+
+    '<div class="stat"><div class="val">'+pending+'</div><div class="lbl">排队中</div></div>'+
+    '<div class="stat"><div class="val">'+done+'</div><div class="lbl">已完成</div></div>'+
+    '<div class="stat"><div class="val">'+fmt(td)+'</div><div class="lbl">已处理 IP</div></div>'+
+    '<div class="stat"><div class="val">'+fmt(ta)+'</div><div class="lbl">总 IP 数</div></div>';
+  var aHtml='',qHtml='',dHtml='';
+  jobs.forEach(function(j){
+    var p=pct(j.done||0,j.total||0),ph=j.phase||'?';
+    var stLabel=j.status==='running'?'运行':j.status==='pending'?'排队':j.status==='completed'?'已完成':j.status||'?';
+    var card='<div class="card"><div class="card-header"><span class="card-id">'+(j.asns||j.job_id).substring(0,24)+'</span>'+
+      '<span class="badge '+(j.status==='running'?'运行':j.status==='pending'?'排队':'已完成')+'">'+stLabel+'</span>'+
+      '<span class="badge '+(ph==='phase1'?'phase1':ph==='phase2b'?'phase2':'phase2')+'">'+(ph==='phase1'?'阶段1·扫描':ph==='phase2b'?'阶段2·验证':'阶段2·扫描')+'</span></div>'+
+      '<div class="bar-wrap"><div class="bar-fill'+(p>=100?' done':'')+'" style="width:'+p+'%"></div></div>'+
+      '<div class="card-meta"><span>'+fmt(j.done)+' / '+fmt(j.total)+' ('+p+'%)</span>'+
+      (j.status==='running'?'<a href="#" onclick="cancelJob(\''+esc(j.job_id)+'\');return false">取消</a>':'<a href="#" onclick="deleteJob(\''+esc(j.job_id)+'\');return false" style="color:var(--red)">删除</a>')+'</div></div>';
+    if(j.status==='running')aHtml+=card;else if(j.status==='pending')qHtml+=card;else dHtml+=card;
+  });
+  document.getElementById('active-jobs').innerHTML=aHtml||'<div class="empty">无活跃任务 · 在上方输入 ASN 或导入文件创建</div>';
+  document.getElementById('queued-jobs').innerHTML=qHtml||'';
+  document.getElementById('done-jobs').innerHTML=dHtml||'<div class="empty">无已完成任务</div>';
+}
+
+
+function renderWorkers(list){
+  var actMap={masscan:'🧹 masscan',scanning:'🔍 扫描中',verifying:'✅ 验证中',idle:'😴 空闲'};
+  var html=list.map(function(w){
+    var act=actMap[w.activity]||w.activity||'idle';
+    return '<div class="worker-row"><span class="worker-dot '+(w.status==='online'?'online':'offline')+'"></span>'+
+      '<span class="worker-name">'+esc(w.id||w.name||'?')+'</span>'+
+      '<span class="worker-meta">CPU '+w.cpu_count+'核 · 内存 '+(w.memory_mb>1024?(w.memory_mb/1024).toFixed(1)+'G':w.memory_mb+'M')+' · '+act+'</span></div>';
+  }).join('');
+  document.getElementById('worker-list').innerHTML=html||'<div class="empty">无 Worker 在线</div>';
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.tab').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active')});
+    t.classList.add('active');document.getElementById('s-'+t.dataset.tab).classList.add('active');
+  });});
+  pollNow();timer=setInterval(pollNow,POLL);
+});
+</script>
+</body>
+</html>

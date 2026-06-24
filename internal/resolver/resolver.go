@@ -4,6 +4,7 @@ package resolver
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -62,7 +63,7 @@ func ResolveASN(asn string) ([]string, error) {
 	return prefixes, nil
 }
 
-// ResolveMultipleASNs resolves multiple ASNs concurrently.
+// ResolveMultipleASNs resolves multiple ASNs concurrently. Failed ASNs are skipped.
 func ResolveMultipleASNs(asns []string) (map[string][]string, error) {
 	type result struct {
 		asn      string
@@ -79,13 +80,21 @@ func ResolveMultipleASNs(asns []string) (map[string][]string, error) {
 	}
 
 	results := make(map[string][]string)
+	var failed []string
 	for range asns {
 		r := <-ch
 		if r.err != nil {
-			return nil, fmt.Errorf("AS%s: %w", r.asn, r.err)
+			log.Printf("[resolver] Skipping AS%s (%v)", r.asn, r.err)
+			failed = append(failed, r.asn)
+			continue
 		}
 		results[r.asn] = r.prefixes
 	}
+
+	if len(results) == 0 && len(failed) > 0 {
+		return nil, fmt.Errorf("all %d ASNs failed resolution", len(asns))
+	}
+
 	return results, nil
 }
 
